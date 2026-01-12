@@ -1,57 +1,12 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useDebounce } from "../hooks/useDebounce";
 import { useSearchParams } from "react-router-dom";
-
-interface Product {
-  id: number;
-  title: string;
-  price: number;
-  images: string[];
-}
-
-import axios from "axios";
-
-const api = axios.create({
-  baseURL: "https://api.escuelajs.co/api/v1",
-  timeout: 10000,
-});
-interface FetchProductsParams {
-  title?: string;
-  offset?: number;
-  limit?: number;
-}
-
-const fetchProducts = async ({
-  title,
-  offset = 0,
-  limit = 10,
-}: FetchProductsParams) => {
-  const response = await api.get("/products", {
-    params: {
-      title,
-      offset,
-      limit,
-    },
-  });
-
-  return response.data;
-};
-
-const gridStyle: React.CSSProperties = {
-  display: "grid",
-  gap: 16,
-  gridTemplateColumns: `
-    repeat(
-      auto-fit,
-      minmax(200px, 1fr)
-    )
-  `,
-};
+import { fetchProducts } from "../services/products/query";
+import { useQuery } from "@tanstack/react-query";
+import { queryClient } from "../providers/RQClientProvider";
 
 export default function Search() {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(false);
-
+  const [loading] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
 
   const searchQuery = searchParams.get("q") ?? "";
@@ -61,27 +16,58 @@ export default function Search() {
 
   const debouncedSearch = useDebounce(searchQuery, 500);
 
+  const {
+    data: products,
+    isPending,
+    isSuccess,
+  } = useQuery({
+    queryKey: ["product", page, debouncedSearch],
+    queryFn: () =>
+      fetchProducts({
+        title: debouncedSearch,
+        offset: (page - 1) * LIMIT,
+        limit: LIMIT,
+      }),
+  });
+
+  const prefetchNextPageProduct = useCallback(
+    (page: number, isLastPage: boolean) => {
+      if (isLastPage) return;
+
+      queryClient.prefetchQuery({
+        queryKey: ["product", page, debouncedSearch],
+        queryFn: () =>
+          fetchProducts({
+            title: debouncedSearch,
+            offset: (page - 1) * LIMIT,
+            limit: LIMIT,
+          }),
+      });
+    },
+    [debouncedSearch]
+  );
+
+  const endRef = useRef<HTMLDivElement | null>(null);
+
   useEffect(() => {
-    const loadProducts = async () => {
-      try {
-        setLoading(true);
-        const data = await fetchProducts({
-          title: debouncedSearch,
-          offset: (page - 1) * LIMIT,
-          limit: LIMIT,
-        });
-        setProducts(data);
-      } catch (error) {
-        console.error("Failed to load products", error);
-      } finally {
-        setLoading(false);
-      }
-    };
+    if (!endRef.current) return;
 
-    loadProducts();
-  }, [debouncedSearch, page]);
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const firstEntry = entries[0];
+        if (firstEntry.isIntersecting) {
+          prefetchNextPageProduct(page + 1, false);
+        }
+      },
+      { threshold: 1.0 }
+    );
 
-const updateSearch = (value: string) => {
+    observer.observe(endRef.current);
+
+    return () => observer.disconnect();
+  }, [page, prefetchNextPageProduct]);
+
+  const updateSearch = (value: string) => {
     setSearchParams({
       q: value,
       page: "1", // reset page on new search
@@ -95,6 +81,19 @@ const updateSearch = (value: string) => {
     });
   };
 
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handlePrevBtn = () => {
+    goToPage(page - 1);
+    scrollToTop();
+  };
+
+  const handleNextBtn = () => {
+    goToPage(page + 1);
+    scrollToTop();
+  };
 
   return (
     <div style={{ maxWidth: 1024, marginInline: "auto", padding: 16 }}>
@@ -113,21 +112,26 @@ const updateSearch = (value: string) => {
         }}
       />
 
-      {loading && <p>Loading...</p>}
+      {isPending && <p>Loading...</p>}
 
-      {!loading && products.length === 0 && <p>No products found</p>}
+      {isSuccess && products?.length === 0 && <p>No products found</p>}
 
-      {!loading && (
+      {isSuccess && (
         <div
-          style={gridStyle}
+          style={{
+            display: "grid",
+            gap: 16,
+            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+          }}
         >
-          {products.map((product) => (
+          {products?.map((product) => (
             <div
               key={product.id}
               style={{
                 border: "1px solid #ddd",
                 padding: 12,
                 borderRadius: 8,
+                maxWidth: 250,
               }}
             >
               <img
@@ -151,10 +155,17 @@ const updateSearch = (value: string) => {
       )}
 
       {/* Pagination Controls */}
-      <div style={{ marginTop: 24, display: "flex", gap: 12, alignItems: "center" }}>
+      <div
+        style={{
+          marginTop: 24,
+          display: "flex",
+          gap: 12,
+          alignItems: "center",
+        }}
+      >
         <button
           disabled={page === 1 || loading}
-          onClick={() => goToPage(page - 1)}
+          onClick={handlePrevBtn}
         >
           Previous
         </button>
@@ -162,12 +173,15 @@ const updateSearch = (value: string) => {
         <span>Page {page}</span>
 
         <button
-          disabled={products.length < LIMIT || loading}
-          onClick={() => goToPage(page + 1)}
+          disabled={(products?.length || 0) < LIMIT || loading}
+          onClick={handleNextBtn}
         >
           Next
         </button>
       </div>
+
+      {/* Sentinel */}
+      <div ref={endRef} style={{ height: 1 }} />
     </div>
   );
 }

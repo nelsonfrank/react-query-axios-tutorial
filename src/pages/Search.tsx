@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useDebounce } from "../hooks/useDebounce";
+import { useSearchParams } from "react-router-dom";
 
 interface Product {
   id: number;
@@ -36,15 +37,29 @@ const fetchProducts = async ({
   return response.data;
 };
 
+const gridStyle: React.CSSProperties = {
+  display: "grid",
+  gap: 16,
+  gridTemplateColumns: `
+    repeat(
+      2 auto-fit,
+      minmax(180px, 1fr)
+    )
+  `,
+};
+
 export default function Search() {
   const [products, setProducts] = useState<Product[]>([]);
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
+
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const searchQuery = searchParams.get("q") ?? "";
+  const page = Number(searchParams.get("page") ?? "1");
 
   const LIMIT = 12;
 
-  const debouncedSearch = useDebounce(search, 500);
+  const debouncedSearch = useDebounce(searchQuery, 500);
 
   useEffect(() => {
     const loadProducts = async () => {
@@ -66,9 +81,20 @@ export default function Search() {
     loadProducts();
   }, [debouncedSearch, page]);
 
-  useEffect(() => {
-    setPage(1);
-  }, [debouncedSearch]);
+const updateSearch = (value: string) => {
+    setSearchParams({
+      q: value,
+      page: "1", // reset page on new search
+    });
+  };
+
+  const goToPage = (newPage: number) => {
+    setSearchParams({
+      q: searchQuery,
+      page: String(newPage),
+    });
+  };
+
 
   return (
     <div style={{ maxWidth: 1024, marginInline: "auto", padding: 16 }}>
@@ -77,8 +103,8 @@ export default function Search() {
       <input
         type="text"
         placeholder="Search products..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
+        value={searchQuery}
+        onChange={(e) => updateSearch(e.target.value)}
         style={{
           padding: 8,
           width: "100%",
@@ -93,11 +119,7 @@ export default function Search() {
 
       {!loading && (
         <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(3, minmax(200px, 1fr))",
-            gap: 16,
-          }}
+          style={gridStyle}
         >
           {products.map((product) => (
             <div
@@ -116,6 +138,10 @@ export default function Search() {
                   height: 150,
                   objectFit: "cover",
                 }}
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src =
+                    "https://via.placeholder.com/150";
+                }}
               />
               <h3>{product.title}</h3>
               <p>${product.price}</p>
@@ -125,10 +151,10 @@ export default function Search() {
       )}
 
       {/* Pagination Controls */}
-      <div style={{ marginTop: 24, display: "flex", gap: 12 }}>
+      <div style={{ marginTop: 24, display: "flex", gap: 12, alignItems: "center" }}>
         <button
           disabled={page === 1 || loading}
-          onClick={() => setPage((p) => p - 1)}
+          onClick={() => goToPage(page - 1)}
         >
           Previous
         </button>
@@ -137,7 +163,7 @@ export default function Search() {
 
         <button
           disabled={products.length < LIMIT || loading}
-          onClick={() => setPage((p) => p + 1)}
+          onClick={() => goToPage(page + 1)}
         >
           Next
         </button>

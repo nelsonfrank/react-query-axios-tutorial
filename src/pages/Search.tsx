@@ -42,8 +42,8 @@ const gridStyle: React.CSSProperties = {
   gap: 16,
   gridTemplateColumns: `
     repeat(
-      2 auto-fit,
-      minmax(180px, 1fr)
+      auto-fit,
+      minmax(200px, 1fr)
     )
   `,
 };

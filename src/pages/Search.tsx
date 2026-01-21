@@ -170,7 +170,7 @@ export default function Search() {
           Previous
         </button>
 
-        <span>Page {page}</span>
+        <span style={{fontSize: "14px"}}>Page {page}</span>
 
         <button
           disabled={(products?.length || 0) < LIMIT || loading}

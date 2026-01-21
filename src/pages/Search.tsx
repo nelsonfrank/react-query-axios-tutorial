@@ -99,18 +99,20 @@ export default function Search() {
     <div style={{ maxWidth: 1024, marginInline: "auto", padding: 16 }}>
       <h1>Products</h1>
 
-      <input
-        type="text"
-        placeholder="Search products..."
-        value={searchQuery}
-        onChange={(e) => updateSearch(e.target.value)}
-        style={{
-          padding: 8,
-          width: "100%",
-          maxWidth: 300,
-          marginBottom: 16,
-        }}
-      />
+    <div style={{ width: "100%", }}>
+          <input
+            type="text"
+            placeholder="Search products..."
+            value={searchQuery}
+            onChange={(e) => updateSearch(e.target.value)}
+            style={{
+              padding: 8,
+              width: "100%",
+              maxWidth: 300,
+              marginBottom: 16,
+            }}
+          />
+    </div>
 
       {isPending && <p>Loading...</p>}
 

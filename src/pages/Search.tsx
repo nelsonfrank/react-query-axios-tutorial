@@ -108,7 +108,7 @@ export default function Search() {
             style={{
               padding: 8,
               width: "100%",
-              maxWidth: 300,
+              maxWidth: 253,
               marginBottom: 16,
             }}
           />
